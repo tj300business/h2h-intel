@@ -270,6 +270,16 @@
         <div id="statsB"></div>
       </div>
     </div>
+    <div id="line-input-section" style="display:none;margin-bottom:12px">
+      <div class="card" style="padding:14px">
+        <div class="label">HARD ROCK LINE</div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <input class="search-input" id="hrLine" type="number" placeholder="e.g. 108.5" step="0.5"
+            oninput="analyzeeLine()" style="font-size:18px;font-weight:bold;max-width:160px" />
+          <div id="line-verdict" style="flex:1"></div>
+        </div>
+      </div>
+    </div>
     <div id="verdict"></div>
   </div>
 
@@ -428,6 +438,7 @@ async function loadStats(name, side) {
     else dataB = stats;
     el.innerHTML = renderStats(stats);
     renderVerdict();
+    if (dataA && dataB) document.getElementById('line-input-section').style.display = 'block';
   } catch {
     el.innerHTML = '<div style="color:var(--red);font-size:12px;margin-top:10px">FAILED TO LOAD</div>';
   }
@@ -446,6 +457,11 @@ async function loadLookup(name) {
 }
 
 // ── VERDICT ───────────────────────────────────────────────────────────────────
+function winPctToML(p) {
+  if (p >= 50) return '-' + Math.round((p / (100 - p)) * 100);
+  return '+' + Math.round(((100 - p) / p) * 100);
+}
+
 function renderVerdict() {
   const el = document.getElementById('verdict');
   if (!dataA || !dataB) { el.innerHTML = ''; return; }
@@ -453,29 +469,78 @@ function renderVerdict() {
   const pace = (dataA.fb + dataB.fb) / 2;
   const paint = (dataA.paint + dataB.paint) / 2;
   const tos = dataA.to + dataB.to;
-  const winDiff = Math.abs(dataA.win - dataB.win);
-  const fav = dataA.win > dataB.win ? dataA : dataB;
-  const dog = dataA.win > dataB.win ? dataB : dataA;
 
-  let label, color;
-  if (combined >= 130)      { label = 'STRONG OVER';  color = 'var(--green)'; }
-  else if (combined >= 120) { label = 'LEAN OVER';    color = 'var(--green)'; }
-  else if (combined <= 105) { label = 'STRONG UNDER'; color = 'var(--red)'; }
-  else if (combined <= 112) { label = 'LEAN UNDER';   color = 'var(--red)'; }
-  else                       { label = 'NEUTRAL — USE LINE MOVEMENT'; color = 'var(--yellow)'; }
+  // Win probability — weighted blend of win% and recent form
+  const aFormW = dataA.form.split('').slice(0,10).filter(c=>c==='W').length;
+  const bFormW = dataB.form.split('').slice(0,10).filter(c=>c==='W').length;
+  const aScore = (dataA.win * 0.7) + (aFormW * 3);
+  const bScore = (dataB.win * 0.7) + (bFormW * 3);
+  const aWinProb = Math.round((aScore / (aScore + bScore)) * 100);
+  const bWinProb = 100 - aWinProb;
+  const fav = aWinProb >= bWinProb ? dataA : dataB;
+  const dog = aWinProb >= bWinProb ? dataB : dataA;
+  const favProb = Math.max(aWinProb, bWinProb);
+  const dogProb = Math.min(aWinProb, bWinProb);
+  const winDiff = favProb - dogProb;
+  const ppgDiff = Math.abs(dataA.ppg - dataB.ppg);
+  const spreadEst = ((ppgDiff * 0.5) + (winDiff * 0.15)).toFixed(1);
+  const favML = winPctToML(favProb);
+  const dogML = winPctToML(dogProb);
 
-  const lines = [
-    `Combined avg output: ${combined.toFixed(1)} pts`,
-    pace > 12 ? 'Fast break heavy — expect up-tempo pace' : null,
-    paint > 28 ? 'Both gamers attack the paint — high FG% game' : null,
+  let totalLabel, totalColor;
+  if (combined >= 130)      { totalLabel = 'STRONG OVER';  totalColor = 'var(--green)'; }
+  else if (combined >= 120) { totalLabel = 'LEAN OVER';    totalColor = 'var(--green)'; }
+  else if (combined <= 105) { totalLabel = 'STRONG UNDER'; totalColor = 'var(--red)'; }
+  else if (combined <= 112) { totalLabel = 'LEAN UNDER';   totalColor = 'var(--red)'; }
+  else                      { totalLabel = 'NEUTRAL';       totalColor = 'var(--yellow)'; }
+
+  const notes = [
+    pace > 12 ? 'Fast break heavy — up-tempo pace expected' : null,
+    paint > 28 ? 'Both attack the paint — high FG% game' : null,
     tos > 16 ? 'High combined turnovers — pace disruption risk' : null,
-    winDiff > 20 ? `${fav.name} big favorite (${fav.win}% vs ${dog.win}%)` : null,
   ].filter(Boolean);
 
   el.innerHTML = `
-    <div class="verdict" style="background:${color}11;border:1px solid ${color}44">
-      <div class="verdict-title" style="color:${color}">▶ ${label}</div>
-      ${lines.map(l => `<div class="verdict-line">· ${l}</div>`).join('')}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="card" style="padding:14px">
+        <div class="label">WIN PROBABILITY</div>
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="font-size:12px;color:var(--accent)">${dataA.name}</span>
+            <span style="font-size:14px;font-weight:bold;color:${aWinProb>=bWinProb?'var(--green)':'var(--text)'}">${aWinProb}%</span>
+          </div>
+          <div style="background:var(--border);border-radius:2px;height:4px">
+            <div style="background:var(--accent);height:4px;border-radius:2px;width:${aWinProb}%"></div>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="font-size:12px;color:var(--accent)">${dataB.name}</span>
+            <span style="font-size:14px;font-weight:bold;color:${bWinProb>aWinProb?'var(--green)':'var(--text)'}">${bWinProb}%</span>
+          </div>
+          <div style="background:var(--border);border-radius:2px;height:4px">
+            <div style="background:var(--accent);height:4px;border-radius:2px;width:${bWinProb}%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="padding:14px">
+        <div class="label">MONEYLINE / SPREAD</div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:2px">FAVORITE</div>
+          <div style="font-size:14px;font-weight:bold;color:var(--green)">${fav.name}</div>
+          <div style="font-size:13px;color:var(--text)">${favML} &nbsp;·&nbsp; -${spreadEst}</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:2px">UNDERDOG</div>
+          <div style="font-size:14px;font-weight:bold;color:var(--text)">${dog.name}</div>
+          <div style="font-size:13px;color:var(--text)">${dogML} &nbsp;·&nbsp; +${spreadEst}</div>
+        </div>
+      </div>
+    </div>
+    <div class="verdict" style="background:${totalColor}11;border:1px solid ${totalColor}44">
+      <div class="verdict-title" style="color:${totalColor}">▶ ${totalLabel}</div>
+      <div class="verdict-line">· Combined avg output: ${combined.toFixed(1)} pts</div>
+      ${notes.map(n => `<div class="verdict-line">· ${n}</div>`).join('')}
       <div style="color:var(--muted);font-size:11px;margin-top:10px">Always confirm with live line movement before placing.</div>
     </div>`;
 }
@@ -545,6 +610,44 @@ function renderLogHistory() {
         </div>
       </div>`
     ).join('') + `</div>`;
+}
+
+// ── LINE ANALYZER ────────────────────────────────────────────────────────────
+function analyzeeLine() {
+  const line = parseFloat(document.getElementById('hrLine').value);
+  const el = document.getElementById('line-verdict');
+  if (!dataA || !dataB || isNaN(line)) { el.innerHTML = ''; return; }
+  const combined = dataA.ppg + dataB.ppg;
+  const diff = combined - line;
+  const absDiff = Math.abs(diff);
+
+  let label, color, detail;
+  if (diff > 12) {
+    label = '🔥 OVER VALUE';
+    color = 'var(--green)';
+    detail = `Line is ${absDiff.toFixed(1)} pts BELOW avg — book set it low`;
+  } else if (diff > 5) {
+    label = '✓ LEAN OVER';
+    color = 'var(--green)';
+    detail = `Avg output ${absDiff.toFixed(1)} pts above the line`;
+  } else if (diff < -12) {
+    label = '🔥 UNDER VALUE';
+    color = 'var(--red)';
+    detail = `Line is ${absDiff.toFixed(1)} pts ABOVE avg — book set it high`;
+  } else if (diff < -5) {
+    label = '✓ LEAN UNDER';
+    color = 'var(--red)';
+    detail = `Avg output ${absDiff.toFixed(1)} pts below the line`;
+  } else {
+    label = '⚡ SHARP LINE';
+    color = 'var(--yellow)';
+    detail = `Line within ${absDiff.toFixed(1)} pts of avg — use form & movement`;
+  }
+
+  el.innerHTML = `
+    <div style="color:${color};font-size:14px;font-weight:bold;letter-spacing:1px">${label}</div>
+    <div style="color:var(--dim);font-size:11px;margin-top:3px">${detail}</div>
+    <div style="color:var(--muted);font-size:10px;margin-top:2px">Avg: ${combined.toFixed(1)} · Line: ${line}</div>`;
 }
 
 init();
