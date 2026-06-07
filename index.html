@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>H2H INTEL</title>
+<style>
+  :root {
+    --bg: #080810;
+    --card: #0f0f1a;
+    --border: #1a1a2e;
+    --accent: #c8f135;
+    --muted: #4a4a6a;
+    --text: #e8e8f0;
+    --dim: #7777aa;
+    --green: #39ff88;
+    --red: #ff3355;
+    --yellow: #ffcc00;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Courier New', Courier, monospace;
+    min-height: 100vh;
+  }
+  #header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  #logo {
+    font-size: 20px;
+    font-weight: bold;
+    letter-spacing: 4px;
+    color: var(--accent);
+  }
+  #status {
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+  #status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  #status-dot.offline { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  #tabs {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    padding: 0 20px;
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    padding: 12px 18px;
+    transition: color 0.2s;
+  }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  #body { padding: 20px; max-width: 860px; margin: 0 auto; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .section-title {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+  .label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .search-wrap { position: relative; }
+  .search-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    outline: none;
+    padding: 10px 14px;
+    width: 100%;
+    transition: border-color 0.2s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .dropdown {
+    background: var(--card);
+    border: 1px solid var(--accent);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    display: none;
+    max-height: 200px;
+    overflow-y: auto;
+    position: absolute;
+    width: 100%;
+    z-index: 100;
+  }
+  .dropdown.open { display: block; }
+  .drop-item {
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    letter-spacing: 1px;
+    padding: 10px 14px;
+  }
+  .drop-item:hover { background: var(--border); color: var(--accent); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 600px) { .grid2 { grid-template-columns: 1fr; } }
+  .gamer-name {
+    color: var(--accent);
+    font-size: 15px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    margin: 14px 0 10px;
+  }
+  .big-num {
+    color: var(--accent);
+    font-size: 34px;
+    font-weight: bold;
+    letter-spacing: -1px;
+  }
+  .stat-row {
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    padding: 7px 0;
+  }
+  .stat-label { color: var(--dim); font-size: 11px; letter-spacing: 1px; }
+  .stat-val { color: var(--accent); font-size: 13px; font-weight: bold; }
+  .form-dots { margin: 8px 0; }
+  .dot {
+    border-radius: 50%;
+    display: inline-block;
+    height: 10px;
+    margin: 0 2px;
+    width: 10px;
+  }
+  .dot.W { background: var(--green); box-shadow: 0 0 4px var(--green); }
+  .dot.L { background: var(--red); box-shadow: 0 0 4px var(--red); }
+  .dot.Q { background: var(--muted); }
+  .verdict {
+    border-radius: 4px;
+    margin-top: 14px;
+    padding: 16px 18px;
+  }
+  .verdict-title {
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+  }
+  .verdict-line { color: var(--dim); font-size: 13px; line-height: 1.7; }
+  .tag {
+    border-radius: 2px;
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: 1px;
+    margin-right: 6px;
+    padding: 2px 7px;
+  }
+  .log-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  @media (max-width: 500px) { .log-grid { grid-template-columns: 1fr; } }
+  .log-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    outline: none;
+    padding: 8px 12px;
+    width: 100%;
+  }
+  .btn {
+    background: transparent;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    padding: 10px 20px;
+    transition: background 0.2s;
+  }
+  .btn-accent {
+    border: 1px solid var(--accent);
+    color: var(--accent);
+  }
+  .btn-accent:hover { background: rgba(200,241,53,0.1); }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 14px; text-align: center; }
+  .loading { color: var(--muted); font-size: 12px; letter-spacing: 2px; padding: 30px 0; text-align: center; }
+  .error-msg { color: var(--red); font-size: 13px; letter-spacing: 2px; padding: 40px 0; text-align: center; }
+  .log-entry {
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: space-between;
+    padding: 10px 0;
+  }
+  .log-entry-left { font-size: 13px; }
+  .log-entry-date { color: var(--muted); font-size: 11px; margin-left: 8px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="logo">H2H INTEL</div>
+  <div id="status">
+    <div id="status-dot"></div>
+    <span id="status-text">CONNECTING...</span>
+  </div>
+</div>
+
+<div id="tabs">
+  <button class="tab-btn active" onclick="switchTab('matchup')">MATCHUP</button>
+  <button class="tab-btn" onclick="switchTab('lookup')">LOOKUP</button>
+  <button class="tab-btn" onclick="switchTab('log')">LOG</button>
+</div>
+
+<div id="body">
+
+  <!-- MATCHUP TAB -->
+  <div id="tab-matchup" class="tab-panel active">
+    <div class="section-title">MATCHUP ANALYSIS</div>
+    <div class="grid2">
+      <div class="card">
+        <div class="label">GAMER A</div>
+        <div class="search-wrap">
+          <input class="search-input" id="inputA" placeholder="TYPE TO SEARCH..." autocomplete="off" />
+          <div class="dropdown" id="dropA"></div>
+        </div>
+        <div id="statsA"></div>
+      </div>
+      <div class="card">
+        <div class="label">GAMER B</div>
+        <div class="search-wrap">
+          <input class="search-input" id="inputB" placeholder="TYPE TO SEARCH..." autocomplete="off" />
+          <div class="dropdown" id="dropB"></div>
+        </div>
+        <div id="statsB"></div>
+      </div>
+    </div>
+    <div id="verdict"></div>
+  </div>
+
+  <!-- LOOKUP TAB -->
+  <div id="tab-lookup" class="tab-panel">
+    <div class="section-title">GAMER LOOKUP</div>
+    <div class="card">
+      <div class="label">SEARCH GAMER</div>
+      <div class="search-wrap">
+        <input class="search-input" id="inputLookup" placeholder="TYPE NAME..." autocomplete="off" />
+        <div class="dropdown" id="dropLookup"></div>
+      </div>
+    </div>
+    <div id="statsLookup"></div>
+  </div>
+
+  <!-- LOG TAB -->
+  <div id="tab-log" class="tab-panel">
+    <div class="section-title">BET LOG</div>
+    <div class="stats-grid" id="log-summary"></div>
+    <div class="card">
+      <div class="section-title">LOG NEW BET</div>
+      <div class="log-grid">
+        <div><div class="label">GAMER A</div><input class="log-input" id="logA" placeholder="NAME..." /></div>
+        <div><div class="label">GAMER B</div><input class="log-input" id="logB" placeholder="NAME..." /></div>
+        <div><div class="label">LINE</div><input class="log-input" id="logLine" placeholder="e.g. 118.5" type="number" /></div>
+        <div><div class="label">BET</div>
+          <select class="log-input" id="logBet"><option>OVER</option><option>UNDER</option></select>
+        </div>
+        <div><div class="label">RESULT</div>
+          <select class="log-input" id="logResult"><option>WIN</option><option>LOSS</option><option>PENDING</option></select>
+        </div>
+        <div><div class="label">NOTES</div><input class="log-input" id="logNotes" placeholder="optional..." /></div>
+      </div>
+      <button class="btn btn-accent" onclick="addLog()">+ ADD TO LOG</button>
+    </div>
+    <div id="log-history"></div>
+  </div>
+
+</div>
+
+<script>
+const PROXY = 'https://h2h-proxy.onrender.com';
+let allNames = [];
+let dataA = null, dataB = null;
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    const res = await fetch(`${PROXY}/names`);
+    const data = await res.json();
+    allNames = Array.isArray(data)
+      ? data.map(n => typeof n === 'string' ? n : (n.participantName || n.name || '')).filter(Boolean)
+      : [];
+    setStatus(true, `LIVE · ${allNames.length} GAMERS`);
+    setupSearch('inputA', 'dropA', name => loadStats(name, 'A'));
+    setupSearch('inputB', 'dropB', name => loadStats(name, 'B'));
+    setupSearch('inputLookup', 'dropLookup', name => loadLookup(name));
+  } catch(e) {
+    setStatus(false, 'OFFLINE — PROXY DOWN');
+  }
+  renderLogSummary();
+  renderLogHistory();
+}
+
+function setStatus(online, text) {
+  const dot = document.getElementById('status-dot');
+  dot.className = online ? 'online' : 'offline';
+  document.getElementById('status-text').textContent = text;
+}
+
+// ── SEARCH ────────────────────────────────────────────────────────────────────
+function setupSearch(inputId, dropId, onSelect) {
+  const input = document.getElementById(inputId);
+  const drop = document.getElementById(dropId);
+
+  input.addEventListener('input', () => {
+    const q = input.value.toLowerCase();
+    if (!q) { drop.classList.remove('open'); return; }
+    const matches = allNames.filter(n => n.toLowerCase().includes(q)).slice(0, 20);
+    drop.innerHTML = matches.map(n =>
+      `<div class="drop-item" onmousedown="selectItem('${inputId}','${dropId}','${n.replace(/'/g,"\\'")}', event)">${n}</div>`
+    ).join('');
+    drop.classList.toggle('open', matches.length > 0);
+  });
+
+  input.addEventListener('blur', () => setTimeout(() => drop.classList.remove('open'), 200));
+}
+
+function selectItem(inputId, dropId, name, e) {
+  e.preventDefault();
+  document.getElementById(inputId).value = name;
+  document.getElementById(dropId).classList.remove('open');
+  // figure out which callback
+  if (inputId === 'inputA') loadStats(name, 'A');
+  else if (inputId === 'inputB') loadStats(name, 'B');
+  else if (inputId === 'inputLookup') loadLookup(name);
+}
+
+// ── STATS ─────────────────────────────────────────────────────────────────────
+async function fetchStats(name) {
+  const res = await fetch(`${PROXY}/stats?participant=${encodeURIComponent(name)}`);
+  return res.json();
+}
+
+function mapStats(raw) {
+  return {
+    name: raw.participantName || '?',
+    ppg:   +(raw.avgPoints ?? 0).toFixed(1),
+    fg:    +(raw.avgFieldGoalsPercent ?? 0).toFixed(1),
+    tp:    +((raw.threePointersPercent ?? raw.avgThreePointers ?? 0)).toFixed(1),
+    ft:    +(raw.freeThrowsPercent ?? 0).toFixed(1),
+    fb:    +(raw.avgFastBreakPoints ?? 0).toFixed(1),
+    paint: +(raw.avgPointsInThePaint ?? 0).toFixed(1),
+    to:    +(raw.avgTurnovers ?? 0).toFixed(1),
+    win:   +(raw.matchesWinPct ?? 0).toFixed(1),
+    games: raw.matchesPlayed ?? 0,
+    assists: +(raw.avgAssists ?? 0).toFixed(1),
+    dunks:   +(raw.avgDunks ?? 0).toFixed(1),
+    form:  raw.matchForm || '',
+  };
+}
+
+function renderStats(stats) {
+  const dots = stats.form.split('').slice(0, 10).map(c =>
+    `<span class="dot ${c === 'W' ? 'W' : c === 'L' ? 'L' : 'Q'}"></span>`
+  ).join('');
+  return `
+    <div class="gamer-name">${stats.name}</div>
+    <div class="big-num">${stats.ppg}</div>
+    <div class="label" style="margin-top:2px">PPG AVG</div>
+    <div class="form-dots">${dots}<span style="color:var(--muted);font-size:10px;margin-left:6px">LAST ${Math.min(stats.form.length,10)}</span></div>
+    ${[
+      ['FG%', stats.fg+'%'],['3PT%', stats.tp+'%'],['FT%', stats.ft+'%'],
+      ['FAST BREAK', stats.fb],['PAINT PTS', stats.paint],['TURNOVERS', stats.to],
+      ['ASSISTS', stats.assists],['DUNKS', stats.dunks],['WIN%', stats.win+'%'],['GAMES', stats.games]
+    ].map(([l,v]) => `<div class="stat-row"><span class="stat-label">${l}</span><span class="stat-val">${v}</span></div>`).join('')}
+  `;
+}
+
+async function loadStats(name, side) {
+  const el = document.getElementById('stats' + side);
+  el.innerHTML = '<div class="loading">LOADING...</div>';
+  try {
+    const raw = await fetchStats(name);
+    const stats = mapStats(raw);
+    if (side === 'A') dataA = stats;
+    else dataB = stats;
+    el.innerHTML = renderStats(stats);
+    renderVerdict();
+  } catch {
+    el.innerHTML = '<div style="color:var(--red);font-size:12px;margin-top:10px">FAILED TO LOAD</div>';
+  }
+}
+
+async function loadLookup(name) {
+  const el = document.getElementById('statsLookup');
+  el.innerHTML = '<div class="loading">LOADING...</div>';
+  try {
+    const raw = await fetchStats(name);
+    const stats = mapStats(raw);
+    el.innerHTML = `<div class="card">${renderStats(stats)}</div>`;
+  } catch {
+    el.innerHTML = '<div class="error-msg">FAILED TO LOAD</div>';
+  }
+}
+
+// ── VERDICT ───────────────────────────────────────────────────────────────────
+function renderVerdict() {
+  const el = document.getElementById('verdict');
+  if (!dataA || !dataB) { el.innerHTML = ''; return; }
+  const combined = dataA.ppg + dataB.ppg;
+  const pace = (dataA.fb + dataB.fb) / 2;
+  const paint = (dataA.paint + dataB.paint) / 2;
+  const tos = dataA.to + dataB.to;
+  const winDiff = Math.abs(dataA.win - dataB.win);
+  const fav = dataA.win > dataB.win ? dataA : dataB;
+  const dog = dataA.win > dataB.win ? dataB : dataA;
+
+  let label, color;
+  if (combined >= 130)      { label = 'STRONG OVER';  color = 'var(--green)'; }
+  else if (combined >= 120) { label = 'LEAN OVER';    color = 'var(--green)'; }
+  else if (combined <= 105) { label = 'STRONG UNDER'; color = 'var(--red)'; }
+  else if (combined <= 112) { label = 'LEAN UNDER';   color = 'var(--red)'; }
+  else                       { label = 'NEUTRAL — USE LINE MOVEMENT'; color = 'var(--yellow)'; }
+
+  const lines = [
+    `Combined avg output: ${combined.toFixed(1)} pts`,
+    pace > 12 ? 'Fast break heavy — expect up-tempo pace' : null,
+    paint > 28 ? 'Both gamers attack the paint — high FG% game' : null,
+    tos > 16 ? 'High combined turnovers — pace disruption risk' : null,
+    winDiff > 20 ? `${fav.name} big favorite (${fav.win}% vs ${dog.win}%)` : null,
+  ].filter(Boolean);
+
+  el.innerHTML = `
+    <div class="verdict" style="background:${color}11;border:1px solid ${color}44">
+      <div class="verdict-title" style="color:${color}">▶ ${label}</div>
+      ${lines.map(l => `<div class="verdict-line">· ${l}</div>`).join('')}
+      <div style="color:var(--muted);font-size:11px;margin-top:10px">Always confirm with live line movement before placing.</div>
+    </div>`;
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ── LOG ───────────────────────────────────────────────────────────────────────
+function getLog() {
+  try { return JSON.parse(localStorage.getItem('h2h_log') || '[]'); } catch { return []; }
+}
+function saveLog(log) { localStorage.setItem('h2h_log', JSON.stringify(log)); }
+
+function addLog() {
+  const a = document.getElementById('logA').value.trim();
+  const b = document.getElementById('logB').value.trim();
+  const line = document.getElementById('logLine').value.trim();
+  if (!a || !b || !line) return;
+  const entry = {
+    id: Date.now(),
+    gamerA: a, gamerB: b, line,
+    bet: document.getElementById('logBet').value,
+    result: document.getElementById('logResult').value,
+    notes: document.getElementById('logNotes').value.trim(),
+    date: new Date().toLocaleDateString()
+  };
+  const log = [entry, ...getLog()];
+  saveLog(log);
+  document.getElementById('logA').value = '';
+  document.getElementById('logB').value = '';
+  document.getElementById('logLine').value = '';
+  document.getElementById('logNotes').value = '';
+  renderLogSummary();
+  renderLogHistory();
+}
+
+function renderLogSummary() {
+  const log = getLog();
+  const wins = log.filter(l => l.result === 'WIN').length;
+  const rate = log.length > 0 ? Math.round(wins / log.length * 100) : 0;
+  const rateColor = rate >= 55 ? 'var(--green)' : rate >= 45 ? 'var(--yellow)' : 'var(--red)';
+  document.getElementById('log-summary').innerHTML = `
+    <div class="stat-card"><div class="big-num">${log.length}</div><div class="label">TOTAL BETS</div></div>
+    <div class="stat-card"><div class="big-num" style="color:${rateColor}">${rate}%</div><div class="label">HIT RATE</div></div>
+    <div class="stat-card"><div class="big-num" style="color:var(--green)">${wins}</div><div class="label">WINS</div></div>
+  `;
+}
+
+function renderLogHistory() {
+  const log = getLog();
+  const el = document.getElementById('log-history');
+  if (!log.length) { el.innerHTML = ''; return; }
+  const resultColor = r => r === 'WIN' ? 'var(--green)' : r === 'LOSS' ? 'var(--red)' : 'var(--yellow)';
+  el.innerHTML = `<div class="card"><div class="section-title">HISTORY</div>` +
+    log.map(e => `
+      <div class="log-entry">
+        <div class="log-entry-left">${e.gamerA} vs ${e.gamerB}<span class="log-entry-date">${e.date}</span></div>
+        <div>
+          <span class="tag" style="background:rgba(100,100,150,0.15);border:1px solid #333;color:var(--dim)">${e.bet} ${e.line}</span>
+          <span class="tag" style="background:${resultColor(e.result)}22;border:1px solid ${resultColor(e.result)}44;color:${resultColor(e.result)}">${e.result}</span>
+          ${e.notes ? `<span style="color:var(--muted);font-size:11px">${e.notes}</span>` : ''}
+        </div>
+      </div>`
+    ).join('') + `</div>`;
+}
+
+init();
+</script>
+</body>
+</html>
