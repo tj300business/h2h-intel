@@ -561,33 +561,7 @@ function getLog() {
 }
 function saveLog(log) { localStorage.setItem('h2h_log', JSON.stringify(log)); }
 
-function addLog() {
-  const a = document.getElementById('logA').value.trim();
-  const b = document.getElementById('logB').value.trim();
-  const line = document.getElementById('logLine').value.trim();
-  if (!a || !b || !line) return;
-  const wager = parseFloat(document.getElementById('logWager').value) || 0;
-  const payout = parseFloat(document.getElementById('logPayout').value) || 0;
-  const entry = {
-    id: Date.now(),
-    gamerA: a, gamerB: b, line,
-    bet: document.getElementById('logBet').value,
-    result: document.getElementById('logResult').value,
-    notes: document.getElementById('logNotes').value.trim(),
-    wager, payout,
-    date: new Date().toLocaleDateString()
-  };
-  const log = [entry, ...getLog()];
-  saveLog(log);
-  document.getElementById('logA').value = '';
-  document.getElementById('logB').value = '';
-  document.getElementById('logLine').value = '';
-  document.getElementById('logWager').value = '';
-  document.getElementById('logPayout').value = '';
-  document.getElementById('logNotes').value = '';
-  renderLogSummary();
-  renderLogHistory();
-}
+// addLog moved above renderLogHistory
 
 function renderLogSummary() {
   const log = getLog();
@@ -612,6 +586,72 @@ function renderLogSummary() {
   `;
 }
 
+// Edit state
+let editingId = null;
+
+function deleteLog(id) {
+  const log = getLog().filter(e => e.id !== id);
+  saveLog(log);
+  renderLogSummary();
+  renderLogHistory();
+}
+
+function editLog(id) {
+  const log = getLog();
+  const entry = log.find(e => e.id === id);
+  if (!entry) return;
+  editingId = id;
+  document.getElementById('logA').value = entry.gamerA;
+  document.getElementById('logB').value = entry.gamerB;
+  document.getElementById('logLine').value = entry.line;
+  document.getElementById('logBet').value = entry.bet;
+  document.getElementById('logWager').value = entry.wager || '';
+  document.getElementById('logPayout').value = entry.payout || '';
+  document.getElementById('logResult').value = entry.result;
+  document.getElementById('logNotes').value = entry.notes || '';
+  document.querySelector('.btn-accent').textContent = '✓ SAVE EDIT';
+  document.querySelector('.btn-accent').style.borderColor = 'var(--yellow)';
+  document.querySelector('.btn-accent').style.color = 'var(--yellow)';
+  window.scrollTo(0, document.getElementById('tab-log').offsetTop);
+}
+
+function addLog() {
+  const a = document.getElementById('logA').value.trim();
+  const b = document.getElementById('logB').value.trim();
+  const line = document.getElementById('logLine').value.trim();
+  if (!a || !b || !line) return;
+  const wager = parseFloat(document.getElementById('logWager').value) || 0;
+  const payout = parseFloat(document.getElementById('logPayout').value) || 0;
+  const entry = {
+    id: editingId || Date.now(),
+    gamerA: a, gamerB: b, line,
+    bet: document.getElementById('logBet').value,
+    result: document.getElementById('logResult').value,
+    notes: document.getElementById('logNotes').value.trim(),
+    wager, payout,
+    date: new Date().toLocaleDateString()
+  };
+  let log = getLog();
+  if (editingId) {
+    log = log.map(e => e.id === editingId ? entry : e);
+    editingId = null;
+    document.querySelector('.btn-accent').textContent = '+ ADD TO LOG';
+    document.querySelector('.btn-accent').style.borderColor = 'var(--accent)';
+    document.querySelector('.btn-accent').style.color = 'var(--accent)';
+  } else {
+    log = [entry, ...log];
+  }
+  saveLog(log);
+  document.getElementById('logA').value = '';
+  document.getElementById('logB').value = '';
+  document.getElementById('logLine').value = '';
+  document.getElementById('logWager').value = '';
+  document.getElementById('logPayout').value = '';
+  document.getElementById('logNotes').value = '';
+  renderLogSummary();
+  renderLogHistory();
+}
+
 function renderLogHistory() {
   const log = getLog();
   const el = document.getElementById('log-history');
@@ -625,12 +665,16 @@ function renderLogHistory() {
       return `
       <div class="log-entry">
         <div class="log-entry-left">${e.gamerA} vs ${e.gamerB}<span class="log-entry-date">${e.date}</span></div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
           <span class="tag" style="background:rgba(100,100,150,0.15);border:1px solid #333;color:var(--dim)">${e.bet} ${e.line}</span>
           <span class="tag" style="background:${resultColor(e.result)}22;border:1px solid ${resultColor(e.result)}44;color:${resultColor(e.result)}">${e.result}</span>
-          ${e.wager ? `<span style="color:var(--muted);font-size:11px">$${e.wager.toFixed(2)} → $${e.payout ? e.payout.toFixed(2) : '?'}</span>` : ''}
+          ${e.wager ? `<span style="color:var(--muted);font-size:11px">$${(+e.wager).toFixed(2)} → $${e.payout ? (+e.payout).toFixed(2) : '?'}</span>` : ''}
           ${pl ? `<span style="color:${plColor};font-size:12px;font-weight:bold">${pl}</span>` : ''}
           ${e.notes ? `<span style="color:var(--muted);font-size:11px">${e.notes}</span>` : ''}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button onclick="editLog(${e.id})" style="background:none;border:1px solid var(--muted);color:var(--muted);font-family:'Courier New',monospace;font-size:10px;letter-spacing:1px;padding:3px 10px;border-radius:2px;cursor:pointer">EDIT</button>
+          <button onclick="deleteLog(${e.id})" style="background:none;border:1px solid var(--red);color:var(--red);font-family:'Courier New',monospace;font-size:10px;letter-spacing:1px;padding:3px 10px;border-radius:2px;cursor:pointer">DELETE</button>
         </div>
       </div>`;
     }).join('') + `</div>`;
