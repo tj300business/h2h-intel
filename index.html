@@ -376,12 +376,19 @@ async function fetchStats(name) {
 }
 
 function mapStats(raw) {
+  // matchForm can be an array ["w","l",...] or a string
+  let formStr = '';
+  if (Array.isArray(raw.matchForm)) {
+    formStr = raw.matchForm.map(c => c.toUpperCase()).join('');
+  } else if (typeof raw.matchForm === 'string') {
+    formStr = raw.matchForm.toUpperCase();
+  }
   return {
     name: raw.participantName || '?',
     ppg:   +(raw.avgPoints ?? 0).toFixed(1),
     fg:    +(raw.avgFieldGoalsPercent ?? 0).toFixed(1),
-    tp:    +((raw.threePointersPercent ?? raw.avgThreePointers ?? 0)).toFixed(1),
-    ft:    +(raw.freeThrowsPercent ?? 0).toFixed(1),
+    tp:    +(raw.threePointersPercent ?? raw.avgThreePointers ?? 0).toFixed(1),
+    ft:    +(raw.freeThrowsPercent ?? raw.avgFreeThrowsScored ?? 0).toFixed(1),
     fb:    +(raw.avgFastBreakPoints ?? 0).toFixed(1),
     paint: +(raw.avgPointsInThePaint ?? 0).toFixed(1),
     to:    +(raw.avgTurnovers ?? 0).toFixed(1),
@@ -389,19 +396,20 @@ function mapStats(raw) {
     games: raw.matchesPlayed ?? 0,
     assists: +(raw.avgAssists ?? 0).toFixed(1),
     dunks:   +(raw.avgDunks ?? 0).toFixed(1),
-    form:  raw.matchForm || '',
+    form:  formStr,
   };
 }
 
 function renderStats(stats) {
-  const dots = stats.form.split('').slice(0, 10).map(c =>
+  const formArr = stats.form ? stats.form.split('').slice(0, 10) : [];
+  const dots = formArr.map(c =>
     `<span class="dot ${c === 'W' ? 'W' : c === 'L' ? 'L' : 'Q'}"></span>`
   ).join('');
   return `
     <div class="gamer-name">${stats.name}</div>
     <div class="big-num">${stats.ppg}</div>
     <div class="label" style="margin-top:2px">PPG AVG</div>
-    <div class="form-dots">${dots}<span style="color:var(--muted);font-size:10px;margin-left:6px">LAST ${Math.min(stats.form.length,10)}</span></div>
+    <div class="form-dots">${dots}${formArr.length > 0 ? `<span style="color:var(--muted);font-size:10px;margin-left:6px">LAST ${formArr.length}</span>` : ''}</div>
     ${[
       ['FG%', stats.fg+'%'],['3PT%', stats.tp+'%'],['FT%', stats.ft+'%'],
       ['FAST BREAK', stats.fb],['PAINT PTS', stats.paint],['TURNOVERS', stats.to],
