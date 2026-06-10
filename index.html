@@ -305,18 +305,22 @@
       <div class="log-grid">
         <div><div class="label">GAMER A</div><input class="log-input" id="logA" placeholder="NAME..." /></div>
         <div><div class="label">GAMER B</div><input class="log-input" id="logB" placeholder="NAME..." /></div>
-        <div><div class="label">LINE</div><input class="log-input" id="logLine" placeholder="e.g. 118.5" type="number" /></div>
+        <div id="line-field-wrap"><div class="label">LINE</div><input class="log-input" id="logLine" placeholder="e.g. 118.5" type="number" /></div>
         <div><div class="label">BET</div>
-          <select class="log-input" id="logBet"><option>OVER</option><option>UNDER</option></select>
+          <select class="log-input" id="logBet" onchange="toggleMoneylinePick(this.value)"><option>OVER</option><option>UNDER</option><option>MONEYLINE</option></select>
         </div>
+        <div id="moneyline-pick-wrap" style="display:none"><div class="label">PLAYER PICKED</div><input class="log-input" id="logPick" placeholder="e.g. JACKAL" /></div>
         <div><div class="label">WAGER ($)</div><input class="log-input" id="logWager" placeholder="e.g. 10.00" type="number" step="0.01" /></div>
         <div><div class="label">PAYOUT ($)</div><input class="log-input" id="logPayout" placeholder="e.g. 16.67" type="number" step="0.01" /></div>
         <div><div class="label">RESULT</div>
-          <select class="log-input" id="logResult"><option>WIN</option><option>LOSS</option><option>PENDING</option></select>
+          <select class="log-input" id="logResult"><option>WIN</option><option>LOSS</option><option>PENDING</option><option>CASHED OUT</option></select>
         </div>
         <div><div class="label">NOTES</div><input class="log-input" id="logNotes" placeholder="optional..." /></div>
       </div>
       <button class="btn btn-accent" onclick="addLog()">+ ADD TO LOG</button>
+    </div>
+    <div style="margin-bottom:12px">
+      <input class="log-input" id="logSearch" placeholder="SEARCH GAMER..." oninput="renderLogHistory()" style="width:100%" />
     </div>
     <div id="log-history"></div>
   </div>
@@ -408,6 +412,12 @@ function mapStats(raw) {
     games: raw.matchesPlayed ?? 0,
     assists: +(raw.avgAssists ?? 0).toFixed(1),
     dunks:   +(raw.avgDunks ?? 0).toFixed(1),
+    blocks:  +(raw.avgBlocks ?? 0).toFixed(1),
+    steals:  +(raw.avgSteals ?? 0).toFixed(1),
+    defReb:  +(raw.avgDefensiveRebounds ?? 0).toFixed(1),
+    offReb:  +(raw.avgOffensiveRebounds ?? 0).toFixed(1),
+    ptsAgainst: +(raw.pointsAgainst && raw.matchesPlayed ? raw.pointsAgainst / raw.matchesPlayed : 0).toFixed(1),
+    ptDiff:  +(raw.pointDifference && raw.matchesPlayed ? raw.pointDifference / raw.matchesPlayed : raw.avgPointDifference ?? 0).toFixed(1),
     form:  formStr,
   };
 }
@@ -425,7 +435,11 @@ function renderStats(stats) {
     ${[
       ['FG%', stats.fg+'%'],['3PT%', stats.tp+'%'],['FT%', stats.ft+'%'],
       ['FAST BREAK', stats.fb],['PAINT PTS', stats.paint],['TURNOVERS', stats.to],
-      ['ASSISTS', stats.assists],['DUNKS', stats.dunks],['WIN%', stats.win+'%'],['GAMES', stats.games]
+      ['ASSISTS', stats.assists],['DUNKS', stats.dunks],
+      ['BLOCKS', stats.blocks],['STEALS', stats.steals],
+      ['DEF REB', stats.defReb],['OFF REB', stats.offReb],
+      ['PTS ALLOWED', stats.ptsAgainst],['PT DIFF', stats.ptDiff],
+      ['WIN%', stats.win+'%'],['GAMES', stats.games]
     ].map(([l,v]) => `<div class="stat-row"><span class="stat-label">${l}</span><span class="stat-val">${v}</span></div>`).join('')}
   `;
 }
@@ -464,6 +478,40 @@ function winPctToML(p) {
   return '+' + Math.round(((100 - p) / p) * 100);
 }
 
+function getFormTrend(formStr) {
+  // Returns scoring trend: positive = improving, negative = declining
+  const arr = formStr.split('').slice(0, 10);
+  const recent3 = arr.slice(0, 3).filter(c => c === 'W').length;
+  const older3 = arr.slice(7, 10).filter(c => c === 'W').length;
+  return recent3 - older3;
+}
+
+function getDefEdge(a, b) {
+  // Who has the defensive edge
+  const aDefScore = (a.steals * 2) + (a.blocks * 2) + a.defReb - (a.ptsAgainst * 0.1);
+  const bDefScore = (b.steals * 2) + (b.blocks * 2) + b.defReb - (b.ptsAgainst * 0.1);
+  const diff = aDefScore - bDefScore;
+  if (Math.abs(diff) < 2) return null;
+  return diff > 0 ? `${a.name} has defensive edge (${a.steals} STL, ${a.blocks} BLK, ${a.ptsAgainst} PTS allowed)` 
+                  : `${b.name} has defensive edge (${b.steals} STL, ${b.blocks} BLK, ${b.ptsAgainst} PTS allowed)`;
+}
+
+function getConfidence(combined, lineDiff, formA, formB, winDiff) {
+  let score = 50;
+  // Combined avg distance from line
+  if (Math.abs(lineDiff) > 12) score += 20;
+  else if (Math.abs(lineDiff) > 7) score += 12;
+  else if (Math.abs(lineDiff) > 3) score += 6;
+  // Form alignment
+  const aWins = formA.split('').slice(0,5).filter(c=>c==='W').length;
+  const bWins = formB.split('').slice(0,5).filter(c=>c==='W').length;
+  if (aWins >= 3 && bWins >= 3) score += 8; // both hot — over
+  if (aWins <= 1 && bWins <= 1) score += 8; // both cold — under
+  // Win% gap
+  if (winDiff > 15) score += 7;
+  return Math.min(score, 99);
+}
+
 function renderVerdict() {
   const el = document.getElementById('verdict');
   if (!dataA || !dataB) { el.innerHTML = ''; return; }
@@ -472,11 +520,13 @@ function renderVerdict() {
   const paint = (dataA.paint + dataB.paint) / 2;
   const tos = dataA.to + dataB.to;
 
-  // Win probability — weighted blend of win% and recent form
+  // Win probability — weighted blend of win%, recent form, pt diff
   const aFormW = dataA.form.split('').slice(0,10).filter(c=>c==='W').length;
   const bFormW = dataB.form.split('').slice(0,10).filter(c=>c==='W').length;
-  const aScore = (dataA.win * 0.7) + (aFormW * 3);
-  const bScore = (dataB.win * 0.7) + (bFormW * 3);
+  const aTrend = getFormTrend(dataA.form);
+  const bTrend = getFormTrend(dataB.form);
+  const aScore = (dataA.win * 0.6) + (aFormW * 3) + (dataA.ptDiff * 0.5) + (aTrend * 2);
+  const bScore = (dataB.win * 0.6) + (bFormW * 3) + (dataB.ptDiff * 0.5) + (bTrend * 2);
   const aWinProb = Math.round((aScore / (aScore + bScore)) * 100);
   const bWinProb = 100 - aWinProb;
   const fav = aWinProb >= bWinProb ? dataA : dataB;
@@ -489,6 +539,22 @@ function renderVerdict() {
   const favML = winPctToML(favProb);
   const dogML = winPctToML(dogProb);
 
+  // Form trends
+  const aTrendStr = aTrend > 0 ? '↑ HOT' : aTrend < 0 ? '↓ COLD' : '→ STEADY';
+  const bTrendStr = bTrend > 0 ? '↑ HOT' : bTrend < 0 ? '↓ COLD' : '→ STEADY';
+  const aTrendColor = aTrend > 0 ? 'var(--green)' : aTrend < 0 ? 'var(--red)' : 'var(--yellow)';
+  const bTrendColor = bTrend > 0 ? 'var(--green)' : bTrend < 0 ? 'var(--red)' : 'var(--yellow)';
+
+  // Defensive edge
+  const defEdge = getDefEdge(dataA, dataB);
+
+  // Line input confidence
+  const lineEl = document.getElementById('hrLine');
+  const line = lineEl ? parseFloat(lineEl.value) : NaN;
+  const lineDiff = !isNaN(line) ? combined - line : 0;
+  const confidence = !isNaN(line) ? getConfidence(combined, lineDiff, dataA.form, dataB.form, winDiff) : null;
+  const confColor = confidence >= 70 ? 'var(--green)' : confidence >= 55 ? 'var(--yellow)' : 'var(--red)';
+
   let totalLabel, totalColor;
   if (combined >= 130)      { totalLabel = 'STRONG OVER';  totalColor = 'var(--green)'; }
   else if (combined >= 120) { totalLabel = 'LEAN OVER';    totalColor = 'var(--green)'; }
@@ -498,8 +564,9 @@ function renderVerdict() {
 
   const notes = [
     pace > 12 ? 'Fast break heavy — up-tempo pace expected' : null,
-    paint > 28 ? 'Both attack the paint — high FG% game' : null,
+    paint > 38 ? 'Both attack the paint heavily — high FG% game expected' : null,
     tos > 16 ? 'High combined turnovers — pace disruption risk' : null,
+    defEdge,
   ].filter(Boolean);
 
   el.innerHTML = `
@@ -507,18 +574,24 @@ function renderVerdict() {
       <div class="card" style="padding:14px">
         <div class="label">WIN PROBABILITY</div>
         <div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
             <span style="font-size:12px;color:var(--accent)">${dataA.name}</span>
-            <span style="font-size:14px;font-weight:bold;color:${aWinProb>=bWinProb?'var(--green)':'var(--text)'}">${aWinProb}%</span>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:10px;color:${aTrendColor}">${aTrendStr}</span>
+              <span style="font-size:14px;font-weight:bold;color:${aWinProb>=bWinProb?'var(--green)':'var(--text)'}">${aWinProb}%</span>
+            </div>
           </div>
           <div style="background:var(--border);border-radius:2px;height:4px">
             <div style="background:var(--accent);height:4px;border-radius:2px;width:${aWinProb}%"></div>
           </div>
         </div>
         <div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
             <span style="font-size:12px;color:var(--accent)">${dataB.name}</span>
-            <span style="font-size:14px;font-weight:bold;color:${bWinProb>aWinProb?'var(--green)':'var(--text)'}">${bWinProb}%</span>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:10px;color:${bTrendColor}">${bTrendStr}</span>
+              <span style="font-size:14px;font-weight:bold;color:${bWinProb>aWinProb?'var(--green)':'var(--text)'}">${bWinProb}%</span>
+            </div>
           </div>
           <div style="background:var(--border);border-radius:2px;height:4px">
             <div style="background:var(--accent);height:4px;border-radius:2px;width:${bWinProb}%"></div>
@@ -539,6 +612,14 @@ function renderVerdict() {
         </div>
       </div>
     </div>
+    ${confidence !== null ? `
+    <div class="card" style="padding:12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div class="label">CONFIDENCE SCORE</div>
+        <div style="font-size:11px;color:var(--muted)">Based on avg gap, form, win%</div>
+      </div>
+      <div style="font-size:32px;font-weight:bold;color:${confColor}">${confidence}</div>
+    </div>` : ''}
     <div class="verdict" style="background:${totalColor}11;border:1px solid ${totalColor}44">
       <div class="verdict-title" style="color:${totalColor}">▶ ${totalLabel}</div>
       <div class="verdict-line">· Combined avg output: ${combined.toFixed(1)} pts</div>
@@ -572,7 +653,7 @@ function renderLogSummary() {
   // Calculate total profit/loss
   let totalPL = 0;
   log.forEach(e => {
-    if (e.result === 'WIN' && e.payout && e.wager) totalPL += (e.payout - e.wager);
+    if ((e.result === 'WIN' || e.result === 'CASHED OUT') && e.payout && e.wager) totalPL += (e.payout - e.wager);
     else if (e.result === 'LOSS' && e.wager) totalPL -= e.wager;
   });
   const plColor = totalPL >= 0 ? 'var(--green)' : 'var(--red)';
@@ -584,6 +665,13 @@ function renderLogSummary() {
     <div class="stat-card"><div class="big-num" style="color:var(--green)">${wins}</div><div class="label">WINS</div></div>
     <div class="stat-card" style="grid-column:span 3"><div class="big-num" style="color:${plColor};font-size:24px">${plStr}</div><div class="label">TOTAL P/L</div></div>
   `;
+}
+
+function toggleMoneylinePick(val) {
+  const isML = val === 'MONEYLINE';
+  document.getElementById('moneyline-pick-wrap').style.display = isML ? 'block' : 'none';
+  document.getElementById('line-field-wrap').style.display = isML ? 'none' : 'block';
+  if (isML) document.getElementById('logLine').value = '';
 }
 
 // Edit state
@@ -609,6 +697,12 @@ function editLog(id) {
   document.getElementById('logPayout').value = entry.payout || '';
   document.getElementById('logResult').value = entry.result;
   document.getElementById('logNotes').value = entry.notes || '';
+  if (entry.bet === 'MONEYLINE') {
+    document.getElementById('moneyline-pick-wrap').style.display = 'block';
+    document.getElementById('logPick').value = entry.pick || '';
+  } else {
+    document.getElementById('moneyline-pick-wrap').style.display = 'none';
+  }
   document.querySelector('.btn-accent').textContent = '✓ SAVE EDIT';
   document.querySelector('.btn-accent').style.borderColor = 'var(--yellow)';
   document.querySelector('.btn-accent').style.color = 'var(--yellow)';
@@ -622,14 +716,16 @@ function addLog() {
   if (!a || !b || !line) return;
   const wager = parseFloat(document.getElementById('logWager').value) || 0;
   const payout = parseFloat(document.getElementById('logPayout').value) || 0;
+  const bet = document.getElementById('logBet').value;
   const entry = {
     id: editingId || Date.now(),
     gamerA: a, gamerB: b, line,
-    bet: document.getElementById('logBet').value,
+    bet,
+    pick: bet === 'MONEYLINE' ? document.getElementById('logPick').value.trim() : '',
     result: document.getElementById('logResult').value,
     notes: document.getElementById('logNotes').value.trim(),
     wager, payout,
-    date: new Date().toLocaleDateString()
+    date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short'})
   };
   let log = getLog();
   if (editingId) {
@@ -648,15 +744,24 @@ function addLog() {
   document.getElementById('logWager').value = '';
   document.getElementById('logPayout').value = '';
   document.getElementById('logNotes').value = '';
+  document.getElementById('logPick').value = '';
+  document.getElementById('moneyline-pick-wrap').style.display = 'none';
   renderLogSummary();
   renderLogHistory();
 }
 
 function renderLogHistory() {
-  const log = getLog();
+  let log = getLog();
   const el = document.getElementById('log-history');
-  if (!log.length) { el.innerHTML = ''; return; }
-  const resultColor = r => r === 'WIN' ? 'var(--green)' : r === 'LOSS' ? 'var(--red)' : 'var(--yellow)';
+  const searchEl = document.getElementById('logSearch');
+  const q = searchEl ? searchEl.value.toLowerCase().trim() : '';
+  if (q) log = log.filter(e => 
+    e.gamerA.toLowerCase().includes(q) || 
+    e.gamerB.toLowerCase().includes(q) ||
+    (e.pick && e.pick.toLowerCase().includes(q))
+  );
+  if (!log.length) { el.innerHTML = q ? '<div style="color:var(--muted);font-size:12px;padding:12px 0;text-align:center;letter-spacing:2px">NO RESULTS</div>' : ''; return; }
+  const resultColor = r => r === 'WIN' ? 'var(--green)' : r === 'LOSS' ? 'var(--red)' : r === 'CASHED OUT' ? '#00bfff' : 'var(--yellow)';
   el.innerHTML = `<div class="card"><div class="section-title">HISTORY</div>` +
     log.map(e => {
       const pl = e.result === 'WIN' && e.payout && e.wager ? '+'+'$'+(e.payout - e.wager).toFixed(2)
@@ -666,7 +771,7 @@ function renderLogHistory() {
       <div class="log-entry">
         <div class="log-entry-left">${e.gamerA} vs ${e.gamerB}<span class="log-entry-date">${e.date}</span></div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
-          <span class="tag" style="background:rgba(100,100,150,0.15);border:1px solid #333;color:var(--dim)">${e.bet} ${e.line}</span>
+          <span class="tag" style="background:rgba(100,100,150,0.15);border:1px solid #333;color:var(--dim)">${e.bet === 'MONEYLINE' ? 'ML · '+(e.pick||'?') : e.bet+' '+e.line}</span>
           <span class="tag" style="background:${resultColor(e.result)}22;border:1px solid ${resultColor(e.result)}44;color:${resultColor(e.result)}">${e.result}</span>
           ${e.wager ? `<span style="color:var(--muted);font-size:11px">$${(+e.wager).toFixed(2)} → $${e.payout ? (+e.payout).toFixed(2) : '?'}</span>` : ''}
           ${pl ? `<span style="color:${plColor};font-size:12px;font-weight:bold">${pl}</span>` : ''}
